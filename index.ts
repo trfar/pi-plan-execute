@@ -418,6 +418,18 @@ export default function piPlan(pi: ExtensionAPI): void {
 		}
 	});
 
+	// Exec run ends → back to PLAN immediately, at settle time. agent_settled is
+	// final (no auto-retry/compaction after it) and also fires for aborted runs,
+	// so an aborted exec still returns to PLAN. setMode → updateToken, so the
+	// widget re-renders now instead of on the next user message.
+	pi.on("agent_settled", async (_event, ctx) => {
+		lastCtx = ctx;
+		if (mode === "exec") {
+			setMode("plan", ctx);
+			if (ctx.hasUI) ctx.ui.notify("EXEC → PLAN: ready for the next idea.", "info");
+		}
+	});
+
 	// Persona (PLAN) / exec note (EXEC), injected per user prompt.
 	// After an exec run, the user's next message hands back to PLAN (next
 	// feature/iteration). The exec kickoff is a custom message — never a flip.
@@ -425,10 +437,7 @@ export default function piPlan(pi: ExtensionAPI): void {
 		lastCtx = ctx;
 		if (event.messageType !== "user") return;
 		const kickoff = (event as { message?: { customType?: string } }).message?.customType === "pi-plan-exec-kickoff";
-		if (mode === "exec" && !kickoff) {
-			setMode("plan", ctx);
-			if (ctx.hasUI) ctx.ui.notify("EXEC → PLAN: ready for the next idea.", "info");
-		}
+		if (mode === "exec" && !kickoff) setMode("plan", ctx);
 		if (mode === "plan") {
 			hasPlanMessages = true;
 			return { message: { customType: "pi-plan-persona", content: PLAN_PERSONA, display: false } };
